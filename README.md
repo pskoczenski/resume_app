@@ -90,6 +90,8 @@ SUPABASE_STORAGE_BUCKET="resumes"
 
 Adjust names and URLs to match your setup. Never commit real keys to git.
 
+**Prisma and `DATABASE_URL`:** The Prisma CLI only loads variables from a `.env` file in the project root, not from `.env.local`. If you keep your credentials in `.env.local`, either add `DATABASE_URL` to a `.env` file as well, or run Prisma commands with the variable loaded (e.g. on macOS/Linux: `export $(grep -v '^#' .env.local | xargs) && npx prisma migrate dev --name init`).
+
 ---
 
 ## Project Setup, Scripts & Tests
@@ -106,6 +108,8 @@ For Prisma and database:
 npx prisma migrate dev --name init
 npx prisma generate
 ```
+
+- **When to run these:** Use `migrate dev` whenever you change `prisma/schema.prisma` (use a descriptive `--name` for each change, e.g. `--name add_job_description`). Use `generate` after a fresh install or when you’ve pulled new migrations and need the Prisma Client regenerated; `migrate dev` runs `generate` for you after applying migrations. If you see `Environment variable not found: DATABASE_URL`, see the "Prisma and DATABASE_URL" note in **Environment Configuration** above.
 
 To run the dev server:
 
