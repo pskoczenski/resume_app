@@ -90,6 +90,8 @@ SUPABASE_STORAGE_BUCKET="resumes"
 
 Adjust names and URLs to match your setup. Never commit real keys to git.
 
+If your database password contains special characters (e.g. `?`, `,`, `@`, `#`), **URL-encode** them in `DATABASE_URL` (e.g. `?` → `%3F`, `,` → `%2C`, `@` → `%40`, `#` → `%23`). Otherwise some tools may misparse the URL and fail to connect (e.g. "Can't reach database server at `postgres:5432`").
+
 **Prisma and `DATABASE_URL`:** The Prisma CLI only loads variables from a `.env` file in the project root, not from `.env.local`. If you keep your credentials in `.env.local`, either add `DATABASE_URL` to a `.env` file as well, or run Prisma commands with the variable loaded (e.g. on macOS/Linux: `export $(grep -v '^#' .env.local | xargs) && npx prisma migrate dev --name init`).
 
 ---
