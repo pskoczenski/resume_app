@@ -133,6 +133,10 @@ Now implement **Step 3: Job Description extraction** according to the following 
   - The `analyzeJobDescription` helper and prompt.
   - The `/api/jd/analyze` endpoint contract.
   - The JD input page and its behavior.
+- Add automated tests for:
+  - The OpenAI helper (using a mocked OpenAI client, verifying prompt shape and response handling).
+  - The `/api/jd/analyze` endpoint happy-path and basic validation.
+  - The JD input page rendering and submit behavior (mocking the API call).
 - Manual test flow (describe briefly):
   - Paste a sample JD.
   - Run analysis.

@@ -78,6 +78,7 @@ Follow this spec and implement **only Step 1 (Initialize Next.js project)**. We 
     - `build`
     - `start`
     - `lint` (optional if ESLint added).
+  - Set up a basic Jest + React Testing Library configuration (or reuse an existing one) so future steps can add tests easily.
 
 ---
 
@@ -90,6 +91,9 @@ Follow this spec and implement **only Step 1 (Initialize Next.js project)**. We 
   - The created layout structure.
   - The main components and pages.
   - How to extend navigation for future steps.
+- Add at least a couple of smoke tests:
+  - One for a small utility (e.g. a `cn` helper).
+  - One for the main dashboard/home page rendering key CTAs.
 
 - Do **not** implement any backend logic, database, AI integration, or file uploads in this step. That will be covered in later docs.
 

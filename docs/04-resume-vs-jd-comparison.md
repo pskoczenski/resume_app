@@ -161,6 +161,9 @@ This UI can be simple; a more sophisticated tailoring workspace will be built in
   - The scoring helper in `lib/scoring.ts`.
   - The `/api/tailor/run` endpoint contract.
   - The basic UI for triggering analysis.
+- Add tests for:
+  - `computeAlignmentScore` with a few representative combinations of resume/JD data.
+  - The `/api/tailor/run` endpoint behavior (e.g. missing IDs vs. valid IDs), using stubs/mocks for Prisma.
 - Manual test (describe briefly):
   - Create a sample resume and JD (from earlier steps).
   - Run tailoring.

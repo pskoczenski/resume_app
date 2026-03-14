@@ -92,28 +92,47 @@ Adjust names and URLs to match your setup. Never commit real keys to git.
 
 ---
 
-## Project Setup & Scripts
+## Project Setup, Scripts & Tests
 
 Once the Next.js app is initialized (Step 1 of the docs workflow):
 
 ```bash
-pnpm install
+npm install
 ```
 
 For Prisma and database:
 
 ```bash
-pnpm prisma migrate dev --name init
-pnpm prisma generate
+npx prisma migrate dev --name init
+npx prisma generate
 ```
 
 To run the dev server:
 
 ```bash
-pnpm dev
+npm run dev
 ```
 
 The app will be available at `http://localhost:3000`.
+
+- **Run tests**
+  - This project uses **Jest** and **React Testing Library** for basic unit and integration tests:
+    - `jest.config.cjs` — Jest configuration (JS DOM env, TypeScript via `ts-jest`).
+    - `jest.setup.ts` — Jest setup file (adds `@testing-library/jest-dom` matchers).
+    - Tests live under `__tests__/`.
+  - To run the full test suite:
+    ```bash
+    npm test
+    ```
+  - To run tests in watch mode (re-run on file changes):
+    ```bash
+    npm test -- --watch
+    ```
+  - Current tests cover:
+    - `lib/utils` (`cn` helper).
+    - `app/page.tsx` (home/dashboard renders main CTA).
+    - `app/upload/page.tsx` (upload form elements).
+    - `app/api/resumes/upload/route.ts` (basic validation branches for the upload API).
 
 ---
 
