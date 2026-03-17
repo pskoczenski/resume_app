@@ -1,5 +1,5 @@
 "use client";
-
+import React from "react";
 import { useState } from "react";
 
 import { Alert } from "@/components/ui/alert";
@@ -84,7 +84,11 @@ export default function UploadPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <label htmlFor="resume-file" className="sr-only">
+                Resume file
+              </label>
               <Input
+                id="resume-file"
                 type="file"
                 accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 onChange={(event) => {

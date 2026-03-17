@@ -8,11 +8,14 @@ module.exports = {
   },
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
   transform: {
-    "^.+\\.(ts|tsx)$": "ts-jest"
+    "^.+\\.(ts|tsx)$": [
+      "ts-jest",
+      { tsconfig: { jsx: "react" } }
+    ]
   },
   // Transpile ESM-only packages in node_modules that Jest otherwise can't parse
   transformIgnorePatterns: [
-    "/node_modules/(?!(openai|@openai)/)"
+    "/node_modules/(?!(openai|@openai|@radix-ui|class-variance-authority)/)"
   ]
 };
 

@@ -1,6 +1,16 @@
+import React from "react";
 import { render, screen } from "@testing-library/react";
 
 import UploadPage from "@/app/upload/page";
+
+jest.mock("@radix-ui/react-slot", () => ({
+  Slot: ({ children }: { children?: React.ReactNode }) => children ?? null
+}));
+
+jest.mock("class-variance-authority", () => ({
+  cva: () => () => "",
+  VariantProps: {}
+}));
 
 describe("UploadPage", () => {
   it("shows file input and upload button", () => {
