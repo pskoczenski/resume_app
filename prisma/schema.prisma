@@ -39,5 +39,21 @@ model TailoringSession {
   createdAt          DateTime @default(now()) @map("created_at")
   resume             Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
   jobDescription     JobDescription @relation(fields: [jobDescriptionId], references: [id], onDelete: Cascade)
+  suggestions        Suggestion[]
+}
+
+model Suggestion {
+  id            String   @id @default(cuid())
+  sessionId      String   @map("session_id")
+  type          String
+  originalText  String   @map("original_text")
+  suggestedText String   @map("suggested_text")
+  rationale     String
+  jdMapping     Json?    @map("jd_mapping")
+  accepted      Boolean  @default(false)
+  createdAt     DateTime @default(now()) @map("created_at")
+  session       TailoringSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
 }
 

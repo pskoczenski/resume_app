@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import type { AlignmentResult, ParsedResume } from "@/lib/scoring";
 
 export interface JDAnalysisResult {
   required_skills: string[];
@@ -28,6 +29,138 @@ function getOpenAIClient(): OpenAI | null {
   const key = process.env.OPENAI_API_KEY;
   if (!key || key.startsWith("sk-your-")) return null;
   return new OpenAI({ apiKey: key });
+}
+
+export type SuggestionType =
+  | "summary_rewrite"
+  | "bullet_rewrite"
+  | "keyword_addition"
+  | "skills_adjustment"
+  | "section_feedback";
+
+export interface GeneratedSuggestion {
+  type: SuggestionType;
+  original_text: string;
+  suggested_text: string;
+  rationale: string;
+  jd_mapping?: unknown;
+}
+
+const SUGGESTIONS_SYSTEM = `You are an expert resume editor and ATS alignment assistant.
+
+CRITICAL GUARDRAILS:
+- Never invent experience, companies, projects, job titles, dates, certifications, or tools not present in the resume.
+- Never add years of experience or management scope that is not explicitly present.
+- You may ONLY rephrase, reorder, or emphasize content that already exists in the resume.
+- If the job description mentions a tool/keyword not found in the resume, you may suggest it ONLY as a keyword/ATS suggestion (not as claimed experience) unless the resume already implies it.
+
+Return ONLY valid JSON. No markdown, no commentary.`;
+
+function safeJsonParse(content: string): unknown {
+  const trimmed = content.trim();
+  const jsonStr =
+    trimmed.startsWith("```") && trimmed.endsWith("```")
+      ? trimmed.replace(/^```\w*\n?|\n?```$/g, "").trim()
+      : trimmed;
+  return JSON.parse(jsonStr);
+}
+
+export async function generateSuggestions(args: {
+  resume: ParsedResume;
+  jd: JDAnalysisResult;
+  analysis: AlignmentResult;
+}): Promise<GeneratedSuggestion[]> {
+  const client = getOpenAIClient();
+  if (!client) {
+    throw new Error("OpenAI API key is not configured.");
+  }
+
+  const { resume, jd, analysis } = args;
+
+  const userPayload = {
+    resume,
+    job_description: jd,
+    analysis: {
+      strengths: analysis.strengths,
+      gaps: analysis.gaps,
+      underemphasized_skills: analysis.underemphasized_skills,
+      score: analysis.score
+    },
+    output_format: {
+      suggestions: [
+        {
+          type: "bullet_rewrite",
+          original_text: "string",
+          suggested_text: "string",
+          rationale: "string",
+          jd_mapping: ["required_skills:react", "responsibility:build_ui"]
+        }
+      ]
+    }
+  };
+
+  const completion = await client.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: SUGGESTIONS_SYSTEM },
+      {
+        role: "user",
+        content:
+          "Generate resume tailoring suggestions using ONLY the provided resume content. " +
+          "Include summary rewrites and bullet rewrites where beneficial, plus keyword/skills suggestions. " +
+          "Each suggestion must include original_text, suggested_text, rationale, and jd_mapping.\n\n" +
+          JSON.stringify(userPayload)
+      }
+    ],
+    response_format: { type: "json_object" },
+    temperature: 0.3
+  });
+
+  const content = completion.choices[0]?.message?.content;
+  if (!content || typeof content !== "string") {
+    throw new Error("OpenAI returned no content.");
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = safeJsonParse(content);
+  } catch {
+    throw new Error("OpenAI response was not valid JSON.");
+  }
+
+  const obj = parsed as Record<string, unknown>;
+  const suggestionsRaw = obj.suggestions;
+  if (!Array.isArray(suggestionsRaw)) {
+    return [];
+  }
+
+  const allowedTypes = new Set<SuggestionType>([
+    "summary_rewrite",
+    "bullet_rewrite",
+    "keyword_addition",
+    "skills_adjustment",
+    "section_feedback"
+  ]);
+
+  const suggestions: GeneratedSuggestion[] = suggestionsRaw
+    .map((s) => s as Record<string, unknown>)
+    .map((s) => ({
+      type: String(s.type) as SuggestionType,
+      original_text: typeof s.original_text === "string" ? s.original_text : "",
+      suggested_text:
+        typeof s.suggested_text === "string" ? s.suggested_text : "",
+      rationale: typeof s.rationale === "string" ? s.rationale : "",
+      jd_mapping: s.jd_mapping
+    }))
+    .filter(
+      (s) =>
+        allowedTypes.has(s.type) &&
+        s.original_text.trim().length > 0 &&
+        s.suggested_text.trim().length > 0 &&
+        s.rationale.trim().length > 0
+    );
+
+  return suggestions;
 }
 
 export async function analyzeJobDescription(
