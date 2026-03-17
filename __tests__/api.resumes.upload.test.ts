@@ -1,3 +1,6 @@
+/**
+ * @jest-environment node
+ */
 import { NextRequest } from "next/server";
 
 import { POST } from "@/app/api/resumes/upload/route";
@@ -59,8 +62,11 @@ function createFormDataRequest(file: File) {
 
 describe("POST /api/resumes/upload", () => {
   it("rejects when file is missing", async () => {
+    // Must send multipart/form-data so formData() doesn't throw; omit "file" field
+    const emptyForm = new FormData();
     const req = new NextRequest("http://localhost/api/resumes/upload", {
-      method: "POST"
+      method: "POST",
+      body: emptyForm
     });
 
     const res = await POST(req);
