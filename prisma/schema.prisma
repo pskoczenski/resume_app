@@ -17,3 +17,13 @@ model Resume {
   createdAt   DateTime @default(now()) @map("created_at")
 }
 
+model JobDescription {
+  id               String   @id @default(cuid())
+  userId           String?  @map("user_id")
+  title            String
+  company          String
+  rawText          String   @map("raw_text")
+  requirementsJson Json     @map("requirements_json")
+  createdAt        DateTime @default(now()) @map("created_at")
+}
+
