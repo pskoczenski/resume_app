@@ -79,6 +79,7 @@ Create a `.env.local` file in the project root (Next.js convention) with at leas
 
 ```bash
 DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/resume_app?schema=public"
+DIRECT_URL="postgresql://USER:PASSWORD@localhost:5432/resume_app?schema=public"
 OPENAI_API_KEY="sk-..."
 
 NEXT_PUBLIC_SUPABASE_URL="https://YOUR_PROJECT.supabase.co"
@@ -89,6 +90,10 @@ SUPABASE_STORAGE_BUCKET="resumes"
 ```
 
 Adjust names and URLs to match your setup. Never commit real keys to git.
+
+If you’re using **Supabase**, it’s recommended to set:
+- `DATABASE_URL` to the **pooler** connection string (often port `6543`) for app runtime.
+- `DIRECT_URL` to the **direct** connection string (port `5432`) for Prisma migrations/introspection.
 
 If your database password contains special characters (e.g. `?`, `,`, `@`, `#`), **URL-encode** them in `DATABASE_URL` (e.g. `?` → `%3F`, `,` → `%2C`, `@` → `%40`, `#` → `%23`). Otherwise some tools may misparse the URL and fail to connect (e.g. "Can't reach database server at `postgres:5432`").
 
