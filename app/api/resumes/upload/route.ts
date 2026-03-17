@@ -80,10 +80,11 @@ export async function POST(req: NextRequest) {
 
     if (uploadError) {
       console.error("[upload] Supabase upload error", uploadError);
-      return NextResponse.json(
-        { error: "Failed to upload file to storage." },
-        { status: 500 }
-      );
+      const msg =
+        process.env.NODE_ENV === "development"
+          ? `Storage upload failed: ${uploadError.message}`
+          : "Failed to upload file to storage.";
+      return NextResponse.json({ error: msg }, { status: 500 });
     }
 
     const {
@@ -117,8 +118,15 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("[upload] Unexpected error", error);
+    const message =
+      error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Unexpected error while uploading resume." },
+      {
+        error:
+          process.env.NODE_ENV === "development"
+            ? message
+            : "Unexpected error while uploading resume."
+      },
       { status: 500 }
     );
   }

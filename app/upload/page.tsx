@@ -75,7 +75,7 @@ export default function UploadPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)]">
-        <Card asChild>
+        <Card>
           <form onSubmit={handleSubmit} className="space-y-0">
             <CardHeader>
               <CardTitle>Resume file</CardTitle>
