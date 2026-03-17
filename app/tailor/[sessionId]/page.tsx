@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { Alert } from "@/components/ui/alert";
@@ -215,6 +216,9 @@ export default function TailorWorkspacePage({
           </Button>
           <Button variant="outline" onClick={load} disabled={isLoading}>
             {isLoading ? "Refreshing…" : "Refresh"}
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href={`/export/${sessionId}`}>Export</Link>
           </Button>
           <Button variant="outline" asChild>
             <a href={`/tailor/debug/${sessionId}`}>Open debug view</a>

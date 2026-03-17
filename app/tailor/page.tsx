@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Alert } from "@/components/ui/alert";
@@ -222,6 +222,11 @@ export default function TailorPage() {
                 <p className="text-xs text-muted-foreground">
                   Session ID: {result.session_id}
                 </p>
+                <Button asChild className="mt-2">
+                  <Link href={`/tailor/${result.session_id}`}>
+                    Open tailoring workspace
+                  </Link>
+                </Button>
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
