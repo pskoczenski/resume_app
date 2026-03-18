@@ -160,6 +160,9 @@ This will make it easier to verify the suggestion engine before polishing the ma
   - OpenAI suggestion helper and prompts.
   - Suggestions are linked to `TailoringSession`.
   - Accept/reject endpoint works.
+- Add tests that:
+  - Exercise the suggestion generation helper with a mocked OpenAI client (ensuring guardrail instructions are present and JSON is parsed correctly).
+  - Cover the generate-suggestions endpoint (or combined tailoring endpoint) and the `PATCH /api/suggestions/[id]` accept/reject flows.
 - Manual test:
   - Run a session for a known resume + JD.
   - Trigger suggestion generation.

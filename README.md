@@ -79,6 +79,7 @@ Create a `.env.local` file in the project root (Next.js convention) with at leas
 
 ```bash
 DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/resume_app?schema=public"
+DIRECT_URL="postgresql://USER:PASSWORD@localhost:5432/resume_app?schema=public"
 OPENAI_API_KEY="sk-..."
 
 NEXT_PUBLIC_SUPABASE_URL="https://YOUR_PROJECT.supabase.co"
@@ -90,30 +91,59 @@ SUPABASE_STORAGE_BUCKET="resumes"
 
 Adjust names and URLs to match your setup. Never commit real keys to git.
 
+If you’re using **Supabase**, it’s recommended to set:
+- `DATABASE_URL` to the **pooler** connection string (often port `6543`) for app runtime.
+- `DIRECT_URL` to the **direct** connection string (port `5432`) for Prisma migrations/introspection.
+
+If your database password contains special characters (e.g. `?`, `,`, `@`, `#`), **URL-encode** them in `DATABASE_URL` (e.g. `?` → `%3F`, `,` → `%2C`, `@` → `%40`, `#` → `%23`). Otherwise some tools may misparse the URL and fail to connect (e.g. "Can't reach database server at `postgres:5432`").
+
+**Prisma and `DATABASE_URL`:** The Prisma CLI only loads variables from a `.env` file in the project root, not from `.env.local`. If you keep your credentials in `.env.local`, either add `DATABASE_URL` to a `.env` file as well, or run Prisma commands with the variable loaded (e.g. on macOS/Linux: `export $(grep -v '^#' .env.local | xargs) && npx prisma migrate dev --name init`).
+
 ---
 
-## Project Setup & Scripts
+## Project Setup, Scripts & Tests
 
 Once the Next.js app is initialized (Step 1 of the docs workflow):
 
 ```bash
-pnpm install
+npm install
 ```
 
 For Prisma and database:
 
 ```bash
-pnpm prisma migrate dev --name init
-pnpm prisma generate
+npx prisma migrate dev --name init
+npx prisma generate
 ```
+
+- **When to run these:** Use `migrate dev` whenever you change `prisma/schema.prisma` (use a descriptive `--name` for each change, e.g. `--name add_job_description`). Use `generate` after a fresh install or when you’ve pulled new migrations and need the Prisma Client regenerated; `migrate dev` runs `generate` for you after applying migrations. If you see `Environment variable not found: DATABASE_URL`, see the "Prisma and DATABASE_URL" note in **Environment Configuration** above.
 
 To run the dev server:
 
 ```bash
-pnpm dev
+npm run dev
 ```
 
 The app will be available at `http://localhost:3000`.
+
+- **Run tests**
+  - This project uses **Jest** and **React Testing Library** for basic unit and integration tests:
+    - `jest.config.cjs` — Jest configuration (JS DOM env, TypeScript via `ts-jest`).
+    - `jest.setup.ts` — Jest setup file (adds `@testing-library/jest-dom` matchers).
+    - Tests live under `__tests__/`.
+  - To run the full test suite:
+    ```bash
+    npm test
+    ```
+  - To run tests in watch mode (re-run on file changes):
+    ```bash
+    npm test -- --watch
+    ```
+  - Current tests cover:
+    - `lib/utils` (`cn` helper).
+    - `app/page.tsx` (home/dashboard renders main CTA).
+    - `app/upload/page.tsx` (upload form elements).
+    - `app/api/resumes/upload/route.ts` (basic validation branches for the upload API).
 
 ---
 

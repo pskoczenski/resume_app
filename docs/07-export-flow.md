@@ -112,6 +112,9 @@ Use `shadcn/ui` components (`Card`, `Button`, `Textarea`, `Badge`, etc.) to keep
   - `/api/export` endpoint behavior and JSON contract.
   - `/export/[sessionId]` page UI and interactions.
   - Copy-to-clipboard functions for each content block.
+- Add tests to:
+  - Verify the export API assembles `tailored_summary`, `tailored_bullets`, and `keywords` correctly from mocked `TailoringSession`, `Resume`, and `Suggestion` data.
+  - Exercise the export page UI, ensuring each export section renders and copy buttons are present (mocking the Clipboard API).
 - Manual test:
   - Complete a session with some accepted suggestions.
   - Navigate to the export page.

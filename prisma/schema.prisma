@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Resume {
+  id                 String   @id @default(cuid())
+  userId             String?  @map("user_id")
+  filename           String
+  fileUrl            String   @map("file_url")
+  rawText            String   @map("raw_text")
+  parsedJson         Json?    @map("parsed_json")
+  createdAt          DateTime @default(now()) @map("created_at")
+  tailoringSessions  TailoringSession[]
+}
+
+model JobDescription {
+  id                 String   @id @default(cuid())
+  userId             String?  @map("user_id")
+  title              String
+  company            String
+  rawText            String   @map("raw_text")
+  requirementsJson   Json     @map("requirements_json")
+  createdAt          DateTime @default(now()) @map("created_at")
+  tailoringSessions  TailoringSession[]
+}
+
+model TailoringSession {
+  id                 String   @id @default(cuid())
+  resumeId           String   @map("resume_id")
+  jobDescriptionId   String   @map("job_description_id")
+  score              Float
+  analysisJson       Json     @map("analysis_json")
+  createdAt          DateTime @default(now()) @map("created_at")
+  resume             Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  jobDescription     JobDescription @relation(fields: [jobDescriptionId], references: [id], onDelete: Cascade)
+  suggestions        Suggestion[]
+}
+
+model Suggestion {
+  id            String   @id @default(cuid())
+  sessionId      String   @map("session_id")
+  type          String
+  originalText  String   @map("original_text")
+  suggestedText String   @map("suggested_text")
+  rationale     String
+  jdMapping     Json?    @map("jd_mapping")
+  accepted      Boolean  @default(false)
+  createdAt     DateTime @default(now()) @map("created_at")
+  session       TailoringSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+}
+

@@ -143,6 +143,9 @@ These components should be generic enough to be reused in other views if needed.
   - The `/tailor/[sessionId]` route and its data-loading strategy.
   - The layout and major components.
   - Accept/reject/edit flows work end-to-end.
+- Add UI tests that:
+  - Render the tailoring workspace with mocked data and ensure both columns (original resume + suggestions) appear.
+  - Simulate accepting and rejecting suggestions and verify the correct API calls/state updates.
 - Manual test:
   - Run a full flow:
     - Upload resume → parse JD → run tailoring → generate suggestions.

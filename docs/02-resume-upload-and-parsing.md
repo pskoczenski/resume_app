@@ -114,6 +114,9 @@ Now implement **Step 2: Resume upload + parsing (text extraction)** according to
   - The new Prisma `Resume` model and migration.
   - The API route path and contract.
   - Supabase upload works end-to-end with environment variables described in `README`.
+- Add or update automated tests to cover:
+  - The upload page rendering the file input and upload button.
+  - The upload API&apos;s validation branches (e.g. missing file, unsupported type), using mocks for Prisma, Supabase, and file parsers.
 - Manually test (describe steps briefly):
   - Start dev server.
   - Visit `/upload`.
