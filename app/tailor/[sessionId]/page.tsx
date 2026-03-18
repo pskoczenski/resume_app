@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import type { JDAnalysisResult } from "@/lib/openai";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -182,6 +183,38 @@ export default function TailorWorkspacePage({
   const analysis = (data?.session.analysis ?? {}) as any;
   const strengths: string[] = Array.isArray(analysis?.strengths) ? analysis.strengths : [];
   const gaps: string[] = Array.isArray(analysis?.gaps) ? analysis.gaps : [];
+  const acceptedSuggestions = (data?.suggestions ?? []).filter((s) => s.accepted);
+  const keywordSkillGaps = useMemo(() => {
+    const req = (data?.job_description?.requirements_json ?? {}) as JDAnalysisResult;
+    const jdSource = [
+      ...(Array.isArray(req.required_skills) ? req.required_skills : []),
+      ...(Array.isArray(req.preferred_skills) ? req.preferred_skills : []),
+      ...(Array.isArray(req.domain_keywords) ? req.domain_keywords : [])
+    ]
+      .map((s) => String(s).trim())
+      .filter(Boolean);
+
+    const suggested = acceptedSuggestions
+      .filter(
+        (s) => s.type === "keyword_addition" || s.type === "skills_adjustment"
+      )
+      .flatMap((s) =>
+        String(s.suggested_text)
+          .split(/[\n,]+/)
+          .map((t) => t.trim())
+          .filter(Boolean)
+      );
+
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const k of [...jdSource, ...suggested]) {
+      const key = k.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(k);
+    }
+    return out.sort((a, b) => a.localeCompare(b));
+  }, [acceptedSuggestions, data?.job_description?.requirements_json]);
 
   return (
     <div className="space-y-6">
@@ -260,7 +293,7 @@ export default function TailorWorkspacePage({
             <CardHeader>
               <CardTitle>Session summary</CardTitle>
               <CardDescription>
-                Strengths and gaps from the alignment analysis.
+                Strengths and gaps from the alignment analysis, plus deduplicated keyword/skill gaps.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -288,6 +321,22 @@ export default function TailorWorkspacePage({
                       <li key={g}>{g}</li>
                     ))}
                   </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">None yet.</p>
+                )}
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                  Keyword / skills gaps
+                </p>
+                {keywordSkillGaps.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {keywordSkillGaps.map((k) => (
+                      <Badge key={k} variant="secondary">
+                        {k}
+                      </Badge>
+                    ))}
+                  </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">None yet.</p>
                 )}

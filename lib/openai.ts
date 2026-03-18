@@ -7,23 +7,33 @@ export interface JDAnalysisResult {
   responsibilities: string[];
   seniority_level: string;
   domain_keywords: string[];
+  education_requirements: string[];
+  soft_skills: string[];
 }
 
-const JD_EXTRACTION_SYSTEM = `You are a precise analyst. Given a job description, extract structured data and respond with ONLY a single JSON object. No markdown, no code fences, no commentary.
+const JD_EXTRACTION_SYSTEM = `You are a precise job-description analyst. Extract structured data and respond with ONLY a single JSON object. No markdown, no code fences, no commentary.
 
 Output exactly this shape (all arrays may be empty if not found):
 {
   "required_skills": ["skill1", "skill2"],
   "preferred_skills": ["skill1"],
   "responsibilities": ["responsibility1"],
-  "seniority_level": "e.g. Mid-level, Senior, etc.",
-  "domain_keywords": ["keyword1", "keyword2"]
+  "seniority_level": "mid",
+  "domain_keywords": ["keyword1"],
+  "education_requirements": ["e.g. Bachelor's in CS or equivalent"],
+  "soft_skills": ["e.g. cross-functional collaboration"]
 }
 
 Rules:
-- Use only what is stated or clearly implied in the job description.
-- Do not invent tools, technologies, or requirements that are not mentioned.
-- If uncertain, return your best-guess arrays; do not invent irrelevant tools or technologies.`;
+- required_skills: Only hard technical/tool skills explicitly required or strongly implied as core to the role.
+- preferred_skills: Skills described as "nice to have", "a plus", or "preferred".
+- responsibilities: Concrete job duties as written. Keep phrasing close to the original — this preserves ATS keyword signal.
+- seniority_level: Normalize to one of: "entry", "mid", "senior", "staff", "principal", "manager", "director", or "" if unclear.
+- domain_keywords: Industry/domain/context terms that are NOT tools or skills — e.g. "fintech", "HIPAA", "B2B SaaS", "distributed systems", "marketplace". These are ATS signal words.
+- education_requirements: Stated degree, field, or equivalent experience requirements.
+- soft_skills: Interpersonal or organizational traits explicitly mentioned (e.g. communication, leadership, ambiguity tolerance).
+- Do not invent tools, technologies, or qualifications not present in the job description.
+- If uncertain, leave fields empty rather than guessing.`;
 
 function getOpenAIClient(): OpenAI | null {
   const key = process.env.OPENAI_API_KEY;
@@ -43,16 +53,50 @@ export interface GeneratedSuggestion {
   original_text: string;
   suggested_text: string;
   rationale: string;
-  jd_mapping?: unknown;
+  impact: "high" | "medium" | "low";
+  improvement_type:
+    | "keyword_alignment"
+    | "clarity"
+    | "specificity"
+    | "relevance"
+    | "summary_positioning"
+    | "skills_reorganization";
+  jd_mapping: string[];
 }
 
-const SUGGESTIONS_SYSTEM = `You are an expert resume editor and ATS alignment assistant.
+const SUGGESTIONS_SYSTEM = `You are an expert resume editor and ATS alignment specialist.
+
+Your goal is not to maximize the number of edits. Your goal is to produce only the highest-value resume improvements, in priority order.
+
+PRIORITY ORDER — evaluate and generate suggestions in this order:
+1. summary_rewrite — only if the summary is generic, misses the JD's seniority signals, or buries top required skills
+2. bullet_rewrite — for bullets describing relevant experience that use weak verbs, lack specificity, or miss high-value JD keywords
+3. keyword_addition — ONLY for required/preferred skills clearly implied by the resume but not explicitly stated
+4. skills_adjustment — reorder or regroup existing skills to front-load JD matches
+5. section_feedback — structural issues only (e.g. missing Projects section for an IC role, skills section placement)
+
+Generate between 4 and 8 suggestions total. Prefer depth over quantity.
+- Do not rewrite bullets that are already strong and well-aligned.
+- If a section needs no changes, leave it alone entirely.
+- For bullet_rewrite: mirror the JD's verb tense and phrasing where natural. Lead with impact. Quantify only if numbers exist in the original.
+- For keyword_addition: only suggest a keyword if (a) the concept is evidenced in the resume but named differently, or (b) it belongs in a non-claiming skills section without overstating hands-on experience. If unsupported, do not suggest it.
 
 CRITICAL GUARDRAILS:
 - Never invent experience, companies, projects, job titles, dates, certifications, or tools not present in the resume.
-- Never add years of experience or management scope that is not explicitly present.
-- You may ONLY rephrase, reorder, or emphasize content that already exists in the resume.
-- If the job description mentions a tool/keyword not found in the resume, you may suggest it ONLY as a keyword/ATS suggestion (not as claimed experience) unless the resume already implies it.
+- Never add years of experience or management scope not explicitly present.
+- You may ONLY rephrase, reorder, clarify, or emphasize content already present in the resume.
+- If a JD keyword is absent from the resume with no reasonable implication, note it as a gap in rationale — do not suggest adding it.
+
+EXAMPLES:
+BAD bullet_rewrite:
+  original_text: "Built internal tools."
+  suggested_text: "Led a team of 6 engineers building React analytics platforms for enterprise customers."
+  reason: Invents team size, technology, and customer scope not present in the resume.
+
+GOOD bullet_rewrite:
+  original_text: "Built internal tools."
+  suggested_text: "Built internal tooling that streamlined operational workflows and reduced manual overhead."
+  reason: Improves specificity and impact framing using only what is implied by the original.
 
 Return ONLY valid JSON. No markdown, no commentary.`;
 
@@ -87,12 +131,22 @@ export async function generateSuggestions(args: {
       score: analysis.score
     },
     output_format: {
+      priority_opportunities: [
+        {
+          area: "summary | bullet | keywords | skills | structure",
+          reason: "string — why this is a high-value opportunity",
+          impact: "high | medium | low"
+        }
+      ],
       suggestions: [
         {
           type: "bullet_rewrite",
           original_text: "string",
           suggested_text: "string",
           rationale: "string",
+          impact: "high | medium | low",
+          improvement_type:
+            "keyword_alignment | clarity | specificity | relevance | summary_positioning | skills_reorganization",
           jd_mapping: ["required_skills:react", "responsibility:build_ui"]
         }
       ]
@@ -100,15 +154,19 @@ export async function generateSuggestions(args: {
   };
 
   const completion = await client.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-4o",
     messages: [
       { role: "system", content: SUGGESTIONS_SYSTEM },
       {
         role: "user",
         content:
-          "Generate resume tailoring suggestions using ONLY the provided resume content. " +
-          "Include summary rewrites and bullet rewrites where beneficial, plus keyword/skills suggestions. " +
-          "Each suggestion must include original_text, suggested_text, rationale, and jd_mapping.\n\n" +
+          "Analyze the provided resume and structured job description. " +
+          "Identify only the highest-value tailoring opportunities — do not try to maximize the number of edits. " +
+          "Leave strong, well-aligned content untouched. " +
+          "First, produce a priority_opportunities array identifying the top improvement areas and why. " +
+          "Then produce suggestions grounded only in the provided resume content. " +
+          "For each suggestion include: type, original_text, suggested_text, rationale, impact, improvement_type, and jd_mapping. " +
+          "If a summary rewrite is unnecessary, omit it. If a bullet is already strong, do not rewrite it.\n\n" +
           JSON.stringify(userPayload)
       }
     ],
@@ -150,14 +208,23 @@ export async function generateSuggestions(args: {
       suggested_text:
         typeof s.suggested_text === "string" ? s.suggested_text : "",
       rationale: typeof s.rationale === "string" ? s.rationale : "",
-      jd_mapping: s.jd_mapping
+      impact: (["high", "medium", "low"].includes(s.impact as string)
+        ? s.impact
+        : "medium") as "high" | "medium" | "low",
+      improvement_type: (typeof s.improvement_type === "string"
+        ? s.improvement_type
+        : "clarity") as GeneratedSuggestion["improvement_type"],
+      jd_mapping: Array.isArray(s.jd_mapping)
+        ? s.jd_mapping.filter((x): x is string => typeof x === "string")
+        : []
     }))
     .filter(
       (s) =>
         allowedTypes.has(s.type) &&
         s.original_text.trim().length > 0 &&
         s.suggested_text.trim().length > 0 &&
-        s.rationale.trim().length > 0
+        s.rationale.trim().length > 0 &&
+        s.impact !== "low"  // discard low-impact suggestions at the source
     );
 
   return suggestions;
@@ -189,15 +256,9 @@ export async function analyzeJobDescription(
     throw new Error("OpenAI returned no content.");
   }
 
-  const trimmed = content.trim();
-  const jsonStr =
-    trimmed.startsWith("```") && trimmed.endsWith("```")
-      ? trimmed.replace(/^```\w*\n?|\n?```$/g, "").trim()
-      : trimmed;
-
   let parsed: unknown;
   try {
-    parsed = JSON.parse(jsonStr) as unknown;
+    parsed = safeJsonParse(content);
   } catch {
     throw new Error("OpenAI response was not valid JSON.");
   }
@@ -217,6 +278,12 @@ export async function analyzeJobDescription(
       typeof obj.seniority_level === "string" ? obj.seniority_level : "",
     domain_keywords: Array.isArray(obj.domain_keywords)
       ? obj.domain_keywords.filter((s): s is string => typeof s === "string")
+      : [],
+    education_requirements: Array.isArray(obj.education_requirements)
+      ? obj.education_requirements.filter((s): s is string => typeof s === "string")
+      : [],
+    soft_skills: Array.isArray(obj.soft_skills)
+      ? obj.soft_skills.filter((s): s is string => typeof s === "string")
       : []
   };
 
