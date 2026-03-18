@@ -128,6 +128,7 @@ export async function generateSuggestions(args: {
       strengths: analysis.strengths,
       gaps: analysis.gaps,
       underemphasized_skills: analysis.underemphasized_skills,
+      required_skill_details: analysis.required_skill_details,
       score: analysis.score
     },
     output_format: {
@@ -163,6 +164,10 @@ export async function generateSuggestions(args: {
           "Analyze the provided resume and structured job description. " +
           "Identify only the highest-value tailoring opportunities — do not try to maximize the number of edits. " +
           "Leave strong, well-aligned content untouched. " +
+          "Pay close attention to required_skill_details in the analysis: " +
+          "  - Skills with status 'adjacent' or 'explicit' but source limited to ['skills'] are buried — prioritize bullet rewrites that surface them. " +
+          "  - Skills with status 'missing' must not be fabricated into resume claims — note them as gaps in rationale only. " +
+          "  - Skills with status 'explicit' and source including 'experience' are already well-evidenced — do not rewrite bullets just to repeat them. " +
           "First, produce a priority_opportunities array identifying the top improvement areas and why. " +
           "Then produce suggestions grounded only in the provided resume content. " +
           "For each suggestion include: type, original_text, suggested_text, rationale, impact, improvement_type, and jd_mapping. " +

@@ -47,7 +47,9 @@ describe("analyzeJobDescription", () => {
       preferred_skills: ["TypeScript"],
       responsibilities: ["Build UIs"],
       seniority_level: "Mid-level",
-      domain_keywords: ["frontend"]
+      domain_keywords: ["frontend"],
+      education_requirements: [],
+      soft_skills: []
     });
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
