@@ -18,8 +18,10 @@ describe("TailorWorkspacePage", () => {
       const url = typeof input === "string" ? input : input.toString();
 
       if (url.includes("/api/tailor/session/session-1")) {
-        return new Response(
-          JSON.stringify({
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
             session: {
               id: "session-1",
               resume_id: "r1",
@@ -57,14 +59,15 @@ describe("TailorWorkspacePage", () => {
                 created_at: new Date().toISOString()
               }
             ]
-          }),
-          { status: 200 }
-        );
+          })
+        } as any;
       }
 
       if (url.includes("/api/suggestions/sg1") && init?.method === "PATCH") {
-        return new Response(
-          JSON.stringify({
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
             id: "sg1",
             session_id: "session-1",
             type: "bullet_rewrite",
@@ -73,18 +76,19 @@ describe("TailorWorkspacePage", () => {
             rationale: "Adds React keyword",
             jd_mapping: [],
             accepted: true
-          }),
-          { status: 200 }
-        );
+          })
+        } as any;
       }
 
       if (url.includes("/api/tailor/suggestions") && init?.method === "POST") {
-        return new Response(JSON.stringify({ session_id: "session-1", suggestions: [] }), {
-          status: 200
-        });
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ session_id: "session-1", suggestions: [] })
+        } as any;
       }
 
-      return new Response(JSON.stringify({ error: "not found" }), { status: 404 });
+      return { ok: false, status: 404, json: async () => ({ error: "not found" }) } as any;
     });
 
     // @ts-expect-error - override in test
@@ -97,10 +101,12 @@ describe("TailorWorkspacePage", () => {
     expect(screen.getByText(/tailoring workspace/i)).toBeInTheDocument();
 
     await waitFor(() =>
-      expect(screen.getByText(/original resume/i)).toBeInTheDocument()
+      expect(
+        screen.getByDisplayValue(/built ui with react/i)
+      ).toBeInTheDocument()
     );
 
-    expect(screen.getByText(/suggestions/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Suggestions" })).toBeInTheDocument();
     expect(screen.getByDisplayValue(/built ui with react/i)).toBeInTheDocument();
   });
 

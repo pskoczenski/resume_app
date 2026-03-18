@@ -30,6 +30,7 @@ export default function ExportPage({
   const [data, setData] = useState<ExportPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<
     "summary" | "bullets" | "keywords" | null
   >(null);
@@ -71,6 +72,40 @@ export default function ExportPage({
       setTimeout(() => setCopyFeedback(null), 2000);
     } catch {
       setCopyFeedback(null);
+    }
+  }
+
+  async function downloadDocx() {
+    setIsDownloading(true);
+    try {
+      const res = await fetch("/api/export/docx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId })
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        try {
+          const json = JSON.parse(text) as { error?: string };
+          throw new Error(json.error ?? "Failed to generate DOCX.");
+        } catch {
+          throw new Error("Failed to generate DOCX.");
+        }
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `roletune-export-${sessionId}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setIsDownloading(false);
     }
   }
 
@@ -193,8 +228,8 @@ export default function ExportPage({
       </Card>
 
       <div>
-        <Button disabled variant="outline" title="Coming soon">
-          Export DOCX (coming soon)
+        <Button variant="outline" onClick={downloadDocx} disabled={isDownloading}>
+          {isDownloading ? "Preparing DOCX…" : "Download DOCX"}
         </Button>
       </div>
     </div>

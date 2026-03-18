@@ -1,5 +1,71 @@
 import type { JDAnalysisResult } from "@/lib/openai";
 
+const SKILL_ALIASES: Record<string, string[]> = {
+  "javascript": ["js", "javascript", "ecmascript", "es6", "es2015"],
+  "typescript": ["ts", "typescript"],
+  "node.js": ["node", "nodejs", "node.js"],
+  "react": ["react", "react.js", "reactjs"],
+  "next.js": ["next", "nextjs", "next.js"],
+  "vue": ["vue", "vue.js", "vuejs"],
+  "angular": ["angular", "angularjs", "angular.js"],
+  "postgresql": ["postgres", "postgresql", "psql"],
+  "mysql": ["mysql", "mariadb"],
+  "mongodb": ["mongo", "mongodb"],
+  "aws": ["aws", "amazon web services", "ec2", "s3", "lambda"],
+  "gcp": ["gcp", "google cloud", "google cloud platform"],
+  "azure": ["azure", "microsoft azure"],
+  "rest api": ["rest", "rest api", "restful", "restful api", "http api", "api integration"],
+  "graphql": ["graphql", "apollo", "apollo graphql"],
+  "ci/cd": [
+    "ci/cd",
+    "ci cd",
+    "continuous integration",
+    "continuous delivery",
+    "continuous deployment",
+    "github actions",
+    "circleci",
+    "jenkins",
+    "gitlab ci"
+  ],
+  "docker": ["docker", "containerization", "containers", "dockerfile"],
+  "kubernetes": ["kubernetes", "k8s"],
+  "terraform": ["terraform", "infrastructure as code", "iac"],
+  "testing": [
+    "jest",
+    "vitest",
+    "cypress",
+    "playwright",
+    "mocha",
+    "chai",
+    "unit testing",
+    "integration testing",
+    "e2e",
+    "end-to-end testing"
+  ],
+  "redis": ["redis", "elasticache"],
+  "git": ["git", "github", "gitlab", "version control"],
+  "python": ["python", "py"],
+  "java": ["java", "jvm"],
+  "go": ["go", "golang"],
+  "rust": ["rust", "rustlang"]
+};
+
+function canonicalizeSkill(skill: string): string {
+  const normalized = normalizeForMatch(skill);
+  for (const [canonical, aliases] of Object.entries(SKILL_ALIASES)) {
+    if (aliases.includes(normalized)) return canonical;
+  }
+  return normalized;
+}
+
+function getSkillAliases(skill: string): string[] {
+  const normalized = normalizeForMatch(skill);
+  for (const [canonical, aliases] of Object.entries(SKILL_ALIASES)) {
+    if (canonical === normalized || aliases.includes(normalized)) return aliases;
+  }
+  return [normalized];
+}
+
 /** Structured resume data used for scoring (from parsed_json or stub). */
 export interface ParsedResume {
   summary?: string;
@@ -8,11 +74,20 @@ export interface ParsedResume {
   rawTextForMatching: string;
 }
 
+export interface SkillMatchDetail {
+  skill: string;
+  status: "explicit" | "adjacent" | "missing";
+  score: number;
+  source: ("skills" | "summary" | "experience")[];
+  matched_terms: string[];
+}
+
 export interface AlignmentResult {
   score: number;
   strengths: string[];
   gaps: string[];
   underemphasized_skills: string[];
+  required_skill_details: SkillMatchDetail[];
 }
 
 const WEIGHTS = {
@@ -93,6 +168,79 @@ function clarityScore(resume: ParsedResume): number {
   return 0.5;
 }
 
+function collectResumeEvidence(resume: ParsedResume): {
+  skillsText: string;
+  summaryText: string;
+  experienceText: string;
+} {
+  const skillsText = resume.skills.join(" ").toLowerCase();
+  const summaryText = (resume.summary ?? "").toLowerCase();
+  const experienceText = (resume.experience ?? [])
+    .flatMap((e) => e.bullets)
+    .join(" ")
+    .toLowerCase();
+  return { skillsText, summaryText, experienceText };
+}
+
+function matchRequiredSkill(
+  skill: string,
+  resume: ParsedResume
+): SkillMatchDetail {
+  const aliases = getSkillAliases(skill);
+  const { skillsText, summaryText, experienceText } = collectResumeEvidence(resume);
+
+  const sources: ("skills" | "summary" | "experience")[] = [];
+  const matched_terms: string[] = [];
+
+  for (const alias of aliases) {
+    if (experienceText.includes(alias)) {
+      if (!sources.includes("experience")) sources.push("experience");
+      if (!matched_terms.includes(alias)) matched_terms.push(alias);
+    }
+    if (skillsText.includes(alias)) {
+      if (!sources.includes("skills")) sources.push("skills");
+      if (!matched_terms.includes(alias)) matched_terms.push(alias);
+    }
+    if (summaryText.includes(alias)) {
+      if (!sources.includes("summary")) sources.push("summary");
+      if (!matched_terms.includes(alias)) matched_terms.push(alias);
+    }
+  }
+
+  // Score by source quality: experience > skills > summary > missing
+  let score = 0;
+  let status: SkillMatchDetail["status"] = "missing";
+
+  if (sources.includes("experience")) {
+    score = 1.0;
+    status = "explicit";
+  } else if (sources.includes("skills")) {
+    score = 0.7;
+    status = "explicit";
+  } else if (sources.includes("summary")) {
+    score = 0.5;
+    status = "adjacent";
+  } else {
+    // Check for adjacent/fuzzy evidence in experience text using tokenized aliases
+    const expTokens = tokenize(experienceText);
+    const hasAdjacent = aliases.some((a) => expTokens.has(a));
+    if (hasAdjacent) {
+      score = 0.4;
+      status = "adjacent";
+      matched_terms.push(...aliases.filter((a) => expTokens.has(a)));
+    }
+  }
+
+  return { skill, status, score, source: sources, matched_terms };
+}
+
+function computeRequiredSkillDetails(
+  jd: JDAnalysisResult,
+  resume: ParsedResume
+): SkillMatchDetail[] {
+  return jd.required_skills.map((skill) => matchRequiredSkill(skill, resume));
+}
+
 /**
  * Compute alignment score and strengths/gaps/underemphasized skills.
  * Deterministic and testable.
@@ -103,87 +251,105 @@ export function computeAlignmentScore(args: {
 }): AlignmentResult {
   const { resume, jd } = args;
   const resumeWordSet = tokenize(resume.rawTextForMatching);
-  const allJdWords = [
-    ...jd.required_skills,
-    ...jd.preferred_skills,
-    ...jd.domain_keywords
-  ];
-  const jdWordSet = new Set(allJdWords.map(normalizeForMatch));
 
-  const requiredSkillScore = overlapRatio(
-    jd.required_skills,
-    resumeWordSet
-  );
-  const preferredSkillScore = overlapRatio(
-    jd.preferred_skills,
-    resumeWordSet
-  );
-  const experienceScore = phraseOverlap(
-    jd.responsibilities,
-    resume.rawTextForMatching
-  );
+  // Evidence-based required skill matching
+  const required_skill_details = computeRequiredSkillDetails(jd, resume);
+  const requiredSkillScore =
+    required_skill_details.reduce((sum, d) => sum + d.score, 0) /
+    Math.max(required_skill_details.length, 1);
+
+  const explicitRequired = required_skill_details.filter((d) => d.status === "explicit");
+  const adjacentRequired = required_skill_details.filter((d) => d.status === "adjacent");
+  const missingRequired = required_skill_details.filter((d) => d.status === "missing");
+
+  // Preferred skill overlap (exact, for secondary signal)
+  const preferredSkillScore = overlapRatio(jd.preferred_skills, resumeWordSet);
+
+  // Responsibility phrase overlap (downweighted — phrasing variance is high)
+  const experienceScore = phraseOverlap(jd.responsibilities, resume.rawTextForMatching);
+
+  // Seniority and domain
   const seniorityScoreVal = seniorityScore(jd.seniority_level, resume);
   const domainScore = overlapRatio(jd.domain_keywords, resumeWordSet);
-  const keywordScore =
-    jd.required_skills.length + jd.preferred_skills.length > 0
-      ? overlapRatio(
-          [...jd.required_skills, ...jd.preferred_skills],
-          resumeWordSet
-        )
-      : 0.5;
   const clarityScoreVal = clarityScore(resume);
 
+  // Visibility score: are explicit required skills prominent (in experience, not just skills list)?
+  const visibilityScore =
+    explicitRequired.length === 0
+      ? 0
+      : explicitRequired.filter((d) => d.source.includes("experience")).length /
+        explicitRequired.length;
+
+  // Updated weights — required skill evidence is the focal point
   const score =
-    WEIGHTS.requiredSkillOverlap * requiredSkillScore +
-    WEIGHTS.relevantExperience * experienceScore +
-    WEIGHTS.seniorityAlignment * seniorityScoreVal +
-    WEIGHTS.domainAlignment * domainScore +
-    WEIGHTS.keywordCoverage * keywordScore +
-    WEIGHTS.communicationClarity * clarityScoreVal;
+    0.40 * requiredSkillScore +
+    0.20 * experienceScore +
+    0.10 * seniorityScoreVal +
+    0.05 * domainScore +
+    0.10 * preferredSkillScore +
+    0.05 * clarityScoreVal +
+    0.10 * visibilityScore;
 
   const normalizedScore = Math.round(Math.min(100, Math.max(0, score * 100)));
 
+  // Strengths
   const strengths: string[] = [];
-  if (requiredSkillScore >= 0.5)
+  if (explicitRequired.length > 0)
     strengths.push(
-      `Strong overlap with required skills (${(requiredSkillScore * 100).toFixed(0)}% match).`
+      `${explicitRequired.length} of ${required_skill_details.length} required skills found (${(requiredSkillScore * 100).toFixed(0)}% match).`
     );
   if (experienceScore >= 0.5)
     strengths.push(
-      `Experience aligns with key responsibilities (${(experienceScore * 100).toFixed(0)}% match).`
+      `Experience aligns with key responsibilities (${(experienceScore * 100).toFixed(0)}% phrase match).`
     );
   if (seniorityScoreVal >= 0.7)
     strengths.push("Seniority level aligns with the role.");
   if (domainScore >= 0.5)
     strengths.push("Domain keywords present in resume.");
-  if (strengths.length === 0) strengths.push("Resume has relevant content to build on.");
+  if (strengths.length === 0)
+    strengths.push("Resume has relevant content to build on.");
 
+  // Gaps
   const gaps: string[] = [];
-  const missingRequired = jd.required_skills.filter(
-    (s) => !resumeWordSet.has(normalizeForMatch(s))
-  );
   if (missingRequired.length > 0)
-    gaps.push(`Missing required skills: ${missingRequired.slice(0, 5).join(", ")}.`);
+    gaps.push(
+      `Missing required skills: ${missingRequired.map((d) => d.skill).slice(0, 5).join(", ")}.`
+    );
+  if (adjacentRequired.length > 0)
+    gaps.push(
+      `Implied but not explicitly stated: ${adjacentRequired.map((d) => d.skill).slice(0, 3).join(", ")}.`
+    );
   if (experienceScore < 0.4)
     gaps.push("Limited overlap with stated job responsibilities.");
   if (domainScore < 0.3 && jd.domain_keywords.length > 0)
     gaps.push("Few domain keywords found in resume.");
 
+  // Underemphasized: explicit in skills list only, not in experience bullets
   const underemphasized_skills: string[] = [];
-  const presentButWeak = jd.preferred_skills.filter((s) => {
-    const n = normalizeForMatch(s);
-    return resumeWordSet.has(n) || resume.rawTextForMatching.toLowerCase().includes(n);
-  });
-  if (presentButWeak.length > 0)
+  const buriedSkills = explicitRequired.filter(
+    (d) => d.source.includes("skills") && !d.source.includes("experience")
+  );
+  if (buriedSkills.length > 0)
     underemphasized_skills.push(
-      `Could highlight more: ${presentButWeak.slice(0, 3).join(", ")}.`
+      `Present but not demonstrated in bullets: ${buriedSkills.map((d) => d.skill).slice(0, 3).join(", ")}.`
+    );
+
+  // Also surface preferred skills that appear in resume but aren't prominent
+  const presentPreferred = jd.preferred_skills.filter((s) => {
+    const aliases = getSkillAliases(s);
+    return aliases.some((a) => resume.rawTextForMatching.toLowerCase().includes(a));
+  });
+  if (presentPreferred.length > 0)
+    underemphasized_skills.push(
+      `Preferred skills to highlight: ${presentPreferred.slice(0, 3).join(", ")}.`
     );
 
   return {
     score: normalizedScore,
     strengths,
     gaps,
-    underemphasized_skills
+    underemphasized_skills,
+    required_skill_details,
   };
 }
 
